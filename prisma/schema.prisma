@@ -1,0 +1,127 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               String   @id @default(uuid()) // Unique identifier
+  clerkId          String   @unique // Clerk's unique user ID
+  email            String   @unique
+  username         String
+  avatarUrl        String
+  tokens           Int      @default(0) // Tokens earned by the user
+  streak           Int      @default(0) // Current streak of consecutive days logged in
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  // Relations
+  playlists        Playlist[]
+  bookmarks        Bookmark[]
+  badges           Badge[]   @relation("UserBadges")
+  notes            Note[]    // Relation to store notes created by the user for videos
+}
+
+
+model Playlist {
+  id              String    @id @default(uuid())
+  title           String
+  description     String?
+  isPublic        Boolean   @default(true) // Public or private playlist
+  ownerId         String?   // Owner of the playlist (null for system playlists)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relation
+  owner           User?     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  videos          Video[]   @relation("PlaylistVideos")
+}
+
+model Video {
+  id             String     @id @default(uuid())
+  videoId        String     @unique // YouTube video ID
+  title          String
+  description    String?
+  duration       Int        // Video duration in seconds
+  thumbnailUrl   String
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  // Relation
+  playlists      Playlist[] @relation("PlaylistVideos")
+  quizzes        Quiz[]
+  bookmarks      Bookmark[]
+  notes          Note[]     // Relation to store notes related to this video
+}
+
+
+
+model Quiz {
+  id             String     @id @default(uuid())
+  videoId        String
+  createdAt      DateTime   @default(now())
+
+  //relation
+  video          Video      @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  questions      Question[]
+}
+
+model Question {
+  id             String     @id @default(uuid())
+  quizId         String
+  text           String     // The question text
+  options        String[]   // Multiple choice options
+  correctAnswer  Int        // Index of the correct answer in options array
+  explanation    String?    // Explanation for the answer
+  createdAt      DateTime   @default(now())
+
+  //relation
+  quiz           Quiz       @relation(fields: [quizId], references: [id], onDelete: Cascade)
+}
+
+
+model Badge {
+  id             String     @id @default(uuid())
+  name           String     @unique
+  description    String
+  iconUrl        String
+  createdAt      DateTime   @default(now())
+
+  //relation
+  users          User[]     @relation("UserBadges")
+}
+
+model Bookmark {
+  id         String   @id @default(uuid())
+  userId     String
+  videoId    String
+  timestamp  Int      // Timestamp in seconds
+  note       String?  // Optional note for the bookmark
+  createdAt  DateTime @default(now())
+
+  //relation
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  video      Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+}
+
+model Note {
+  id         String   @id @default(uuid())
+  userId     String
+  videoId    String
+  content    String   // The note content
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  video      Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+}
