@@ -200,7 +200,7 @@ const Leaderboard: React.FC = () => {
             <input
               type="checkbox"
               className="opacity-0 w-0 h-0 absolute"
-              checked={activeChart === `${leaderboard}`}
+              checked={activeChart === `${Leaderboard}`}
               onChange={() => setActiveChart(activeChart === 'tokens' ? 'streaks' : 'tokens')}
             />
             <span
