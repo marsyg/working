@@ -7,8 +7,23 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { downloadAndTranscribeVideo } from '@/lib/assemblyAi';
+import { getYouTubeTranscript } from '@/lib/transcript';
+import { fetchPlaylistItems } from '@/lib/youtube';
 
 export default function PlayerPage() {
+  const fetchCaptions = async (videoId: string) => {
+    const response = await fetch(`/api/getCaptions?videoId=${videoId}`);
+    const data = await response.json();
+    if (response.ok) {
+      console.log(data.captions);
+    } else {
+      console.error(data.error);
+    }
+  };
+
+  // Example usage
+
   const searchParams = useSearchParams();
   const router = useRouter();
   const [videoId, setVideoId] = useState<string | null>(null);
@@ -18,13 +33,17 @@ export default function PlayerPage() {
     currentVideoId: string;
     currentIndex: number;
   } | null>(null);
+  const currentVideoId = searchParams.get('videoId');
   const [isLoading, setIsLoading] = useState(true);
   const { data: session, status } = useSession();
 
   useEffect(() => {
-    const currentVideoId = searchParams.get('videoId');
-    setVideoId(currentVideoId);
+    if (currentVideoId) {
+      setVideoId(currentVideoId);
+    }
+  }, [currentVideoId]);
 
+  useEffect(() => {
     if (session?.accessToken) {
       const loadPlaylists = async () => {
         setIsLoading(true);
@@ -35,7 +54,10 @@ export default function PlayerPage() {
           } else {
             // Fetch playlist items here if needed
             // Mocked for now
-            const response = await fetchPlaylistItems(session.accessToken, 'PLRAV69dS1uWTvNby0b1w_boT35Onv5YWS');
+            const response = await fetchPlaylistItems(
+              session.accessToken,
+              'PLRAV69dS1uWTvNby0b1w_boT35Onv5YWS',
+            );
             setPlaylists(response.items);
           }
         } catch (error) {
@@ -47,13 +69,13 @@ export default function PlayerPage() {
 
       loadPlaylists();
     }
-  }, [searchParams, session]);
+  }, [session]);
 
   const handleVideoSelect = (videoId: string) => {
     setVideoId(videoId);
     router.push(`/player?videoId=${videoId}`);
   };
-
+  const handleStartQuiz = (videoId: string) => {};
   const handleNextVideo = () => {
     if (
       playlistData &&
@@ -118,10 +140,15 @@ export default function PlayerPage() {
     <div className="flex flex-col lg:flex-row gap-6 p-6 bg-background min-h-screen">
       <div className="lg:w-3/4">
         {videoId ? (
-          <VideoPlayer videoId={videoId} />
+          <div>
+            <button onClick={() => fetchCaptions(videoId)}>startquiz</button>
+            <VideoPlayer videoId={videoId} />
+          </div>
         ) : (
           <Card className="p-6">
-            <CardContent>No video selected. Please choose one from the playlist.</CardContent>
+            <CardContent>
+              No video selected. Please choose one from the playlist.
+            </CardContent>
           </Card>
         )}
         <div className="mt-6">
@@ -162,43 +189,45 @@ function VideoPlayer({ videoId }: { videoId: string }) {
 }
 
 function NotesEditor() {
-    const [notes, setNotes] = useState('');
-  
-    const handleBold = () => setNotes((prev) => prev + '**bold** ');
-    const handleItalic = () => setNotes((prev) => prev + '_italic_ ');
-  
-    return (
-      <Card className="shadow-md border border-gray-200">
-        <CardHeader>
-          <CardTitle className="text-xl font-semibold text-gray-800">Notes</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center gap-3 mb-4">
-            <Button
-              variant="outline"
-              onClick={handleBold}
-              className="text-sm px-3 py-1.5 border border-gray-300 hover:bg-gray-100"
-            >
-              Bold
-            </Button>
-            <Button
-              variant="outline"
-              onClick={handleItalic}
-              className="text-sm px-3 py-1.5 border border-gray-300 hover:bg-gray-100"
-            >
-              Italic
-            </Button>
-          </div>
-          <Textarea
-            className="w-full h-40 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="Write your notes here..."
-          />
-        </CardContent>
-      </Card>
-    );
-  }
+  const [notes, setNotes] = useState('');
+
+  const handleBold = () => setNotes((prev) => prev + '**bold** ');
+  const handleItalic = () => setNotes((prev) => prev + '_italic_ ');
+
+  return (
+    <Card className="shadow-md border border-gray-200">
+      <CardHeader>
+        <CardTitle className="text-xl font-semibold text-gray-800">
+          Notes
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="flex items-center gap-3 mb-4">
+          <Button
+            variant="outline"
+            onClick={handleBold}
+            className="text-sm px-3 py-1.5 border border-gray-300 hover:bg-gray-100"
+          >
+            Bold
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleItalic}
+            className="text-sm px-3 py-1.5 border border-gray-300 hover:bg-gray-100"
+          >
+            Italic
+          </Button>
+        </div>
+        <Textarea
+          className="w-full h-40 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="Write your notes here..."
+        />
+      </CardContent>
+    </Card>
+  );
+}
 
 function Playlist({
   playlistData,
@@ -220,7 +249,9 @@ function Playlist({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-lg">{currentVideo?.snippet.title || 'Playlist'}</CardTitle>
+        <CardTitle className="text-lg">
+          {currentVideo?.snippet.title || 'Playlist'}
+        </CardTitle>
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
