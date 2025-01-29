@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useSession, signIn } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Loader2, ChevronLeft, ChevronRight, Bold, Italic } from 'lucide-react';
 
 export default function PlayerPage() {
   const searchParams = useSearchParams();
@@ -161,44 +161,194 @@ function VideoPlayer({ videoId }: { videoId: string }) {
   );
 }
 
-function NotesEditor() {
-    const [notes, setNotes] = useState('');
-  
-    const handleBold = () => setNotes((prev) => prev + '**bold** ');
-    const handleItalic = () => setNotes((prev) => prev + '_italic_ ');
-  
-    return (
-      <Card className="shadow-md border border-gray-200">
-        <CardHeader>
-          <CardTitle className="text-xl font-semibold text-gray-800">Notes</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center gap-3 mb-4">
-            <Button
-              variant="outline"
-              onClick={handleBold}
-              className="text-sm px-3 py-1.5 border border-gray-300 hover:bg-gray-100"
-            >
-              Bold
-            </Button>
-            <Button
-              variant="outline"
-              onClick={handleItalic}
-              className="text-sm px-3 py-1.5 border border-gray-300 hover:bg-gray-100"
-            >
-              Italic
-            </Button>
-          </div>
-          <Textarea
-            className="w-full h-40 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="Write your notes here..."
-          />
-        </CardContent>
-      </Card>
-    );
-  }
+// import { Button, Card, CardHeader, CardTitle, CardContent, Textarea } from 'shadcn'; // Ensure ShadCN components are imported correctly
+// import { useState } from 'react';
+// import { Button, Card, CardHeader, CardTitle, CardContent, Textarea } from 'shadcn';
+import { Mic, Edit } from 'lucide-react';
+
+import { Alert, AlertDescription } from '@/components/ui/alert';
+
+const NotesEditor = () => {
+  const [notes, setNotes] = useState('');
+  const [isRecording, setIsRecording] = useState(false);
+  const [error, setError] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [speechRecognition, setSpeechRecognition] = useState(null);
+
+  // Initialize speech recognition on component mount
+  useEffect(() => {
+    initSpeechRecognition();
+  }, []);
+
+  const initSpeechRecognition = useCallback(() => {
+    try {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        throw new Error('Speech Recognition is not supported in this browser');
+      }
+
+      const recognition = new SpeechRecognition();
+      recognition.lang = 'en-US';
+      recognition.continuous = true;
+      recognition.interimResults = true;
+
+      recognition.onstart = () => {
+        setIsRecording(true);
+        setError('');
+      };
+
+      recognition.onend = () => {
+        setIsRecording(false);
+      };
+
+      recognition.onerror = (event) => {
+        setError(`Speech recognition error: ${event.error}`);
+        setIsRecording(false);
+      };
+
+      recognition.onresult = (event) => {
+        const transcript = Array.from(event.results)
+          .map(result => result[0].transcript)
+          .join(' ');
+        
+        setNotes(prev => {
+          const lastChar = prev.slice(-1);
+          const space = lastChar && lastChar !== ' ' ? ' ' : '';
+          return prev + space + transcript;
+        });
+      };
+
+      setSpeechRecognition(recognition);
+    } catch (err) {
+      setError(err.message);
+    }
+  }, []);
+
+  const handleVoiceRecording = useCallback(() => {
+    if (!speechRecognition) {
+      initSpeechRecognition();
+      return;
+    }
+
+    try {
+      if (isRecording) {
+        speechRecognition.stop();
+      } else {
+        speechRecognition.start();
+      }
+    } catch (err) {
+      setError(`Failed to ${isRecording ? 'stop' : 'start'} recording: ${err.message}`);
+    }
+  }, [speechRecognition, isRecording, initSpeechRecognition]);
+
+  const handleTextFormat = useCallback((format: 'bold' | 'italic') => {
+    const textarea = document.querySelector('textarea');
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selectedText = notes.substring(start, end);
+    
+    const formatMap = {
+      bold: `**${selectedText}**`,
+      italic: `_${selectedText}_`
+    };
+
+    const newText = notes.substring(0, start) + formatMap[format] + notes.substring(end);
+    setNotes(newText);
+  }, [notes]);
+
+  const handleTextImprovement = async () => {
+    try {
+      setIsProcessing(true);
+      setError('');
+      
+      // Simulated API call - replace with actual AI service
+      const response = await fetch('your-ai-service-endpoint', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: notes })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to improve text');
+      }
+
+      const { improvedText } = await response.json();
+      setNotes(improvedText);
+    } catch (err) {
+      setError(`Failed to improve text: ${err.message}`);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  return (
+    <Card className="shadow-lg">
+      <CardHeader>
+        <CardTitle className="text-2xl font-semibold">Smart Notes Editor</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {error && (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+        
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => handleTextFormat('bold')}
+            className="flex items-center gap-2"
+          >
+            <Bold className="w-4 h-4" />
+            Bold
+          </Button>
+          
+          <Button
+            variant="outline"
+            onClick={() => handleTextFormat('italic')}
+            className="flex items-center gap-2"
+          >
+            <Italic className="w-4 h-4" />
+            Italic
+          </Button>
+          
+          <Button
+            variant="outline"
+            onClick={handleVoiceRecording}
+            className={`flex items-center gap-2 ${isRecording ? 'bg-red-100 hover:bg-red-200' : ''}`}
+            disabled={isProcessing}
+          >
+            <Mic className={`w-4 h-4 ${isRecording ? 'text-red-500' : ''}`} />
+            {isRecording ? 'Stop Recording' : 'Start Recording'}
+          </Button>
+          
+          <Button
+            variant="outline"
+            onClick={handleTextImprovement}
+            className="flex items-center gap-2"
+            disabled={isProcessing || !notes.trim()}
+          >
+            <Edit className="w-4 h-4" />
+            {isProcessing ? 'Improving...' : 'Improve Text'}
+          </Button>
+        </div>
+
+        <Textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="Write or dictate your notes here..."
+          className="min-h-[200px] w-full"
+        />
+      </CardContent>
+    </Card>
+  );
+};
+
+
+
+
 
 function Playlist({
   playlistData,
